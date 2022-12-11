@@ -71,7 +71,7 @@ class TrainHelper:
         best_acc = 0.0
 
         for epoch in range(self.train_config.num_epochs):
-            print(f'Epoch {epoch}/{self.train_config.num_epochs - 1}')
+            print(f'Epoch {epoch+1}/{self.train_config.num_epochs}')
             print('-' * 10)
 
             for phase in ['train', 'val']:
@@ -86,9 +86,8 @@ class TrainHelper:
                 self.running_loss = 0.0
                 self.running_corrects = 0
 
-                # TODO: This + get dataset here
                 # Iterate over data
-                for inputs, labels in self.ds.dataloaders[phase]:
+                for inputs, labels in self.ds.dataloaders[phase][self.train_config.cv_fold]:
                     self.optimizer_step(phase, inputs, labels)
                 
                 if phase == 'train':
@@ -96,8 +95,8 @@ class TrainHelper:
                     self.scheduler.step()
 
                 # Computes statistics
-                epoch_loss = self.running_loss / self.ds_sizes[phase]
-                epoch_acc = self.running_corrects.double() / self.ds_sizes[phase]
+                epoch_loss = self.running_loss / self.ds.sizes[phase]
+                epoch_acc = self.running_corrects.double() / self.ds.sizes[phase]
 
                 print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
@@ -114,6 +113,6 @@ class TrainHelper:
         print(f'Best val Acc: {best_acc:4f}')
 
         # Load the best weights before returning
-        self.model.load_state_dict(best_model_wts)
+        # self.model.load_state_dict(best_model_wts)
 
         return self.model

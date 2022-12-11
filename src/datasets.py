@@ -16,6 +16,7 @@ import pandas as pd
 import albumentations as A
 from sklearn.model_selection import KFold
 from torch.utils.data import SubsetRandomSampler, ConcatDataset, DataLoader
+import globals
 
 # Because we are fine-tuning from ImageNet...
 NORM_MEAN = [0.485, 0.456, 0.406]
@@ -49,15 +50,12 @@ class DatasetWrapper:
                             transforms.ToTensor(),
                             transforms.Normalize(mean=NORM_MEAN, std=NORM_STD) ])
 
-        self.path = path
-        # TODO: Is this even deterministic?
-        # TODO - FileNotFoundError: [Errno 2] No such file or directory: '/netscratch/martelleto/ds/Dataset_BUSI_with_GT'
+        self.path = os.path.join(globals.BASE_PATH, path)
         self.dataset = AugDataset(self.path, aug=None, transform=transform)
 
         ds_size = len(self.dataset)
-        assert ds_size % 5 == 0, "Dataset size must be divisible by 5"
-
         self.fold_size = int(ds_size / 5)
+
         self.train_size = self.fold_size * 4
         self.val_size = self.fold_size
 
@@ -70,10 +68,11 @@ class DatasetWrapper:
         for fold, (train_idx, val_idx) in enumerate(splits.split(self.dataset)):
             train_sampler = SubsetRandomSampler(train_idx)
             test_sampler = SubsetRandomSampler(val_idx)
-            self.train_loaders.append(DataLoader(self.aug_dataset, batch_size=train_config.config['batch_size'], shuffle=True, sampler=train_sampler))
-            self.test_loaders.append(DataLoader(self.dataset, batch_size=train_config.config['batch_size'], shuffle=True, sampler=test_sampler))
+            self.train_loaders.append(DataLoader(self.aug_dataset, batch_size=train_config.batch_size, sampler=train_sampler))
+            self.test_loaders.append(DataLoader(self.dataset, batch_size=train_config.batch_size, sampler=test_sampler))
 
         self.dataloaders = {'train': self.train_loaders, 'val': self.test_loaders}
+        self.sizes = {'train': self.train_size, 'val': self.val_size}
 
         # We are not using the masks currently, so it is important to ensure no masks were left in the dataset
         for (sample_name, _) in self.dataset.samples:
@@ -82,11 +81,12 @@ class DatasetWrapper:
     def get_aug(self):        
         aug = A.Compose([ A.RandomRotate90(),
                         A.Transpose(),
-                        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.50, rotate_limit=45, p=.75),
-                        A.Blur(blur_limit=2.2),
+                        A.ShiftScaleRotate(shift_limit=0, scale_limit=0.95, rotate_limit=10, p=.75),
+                        A.Blur(blur_limit=0.5),
                         A.PadIfNeeded(224, 224),
                         A.RandomCrop(width=224, height=224),
-                        A.Normalize(mean=NORM_MEAN, std=NORM_STD) ])
+                        A.Normalize(mean=NORM_MEAN, std=NORM_STD)
+                    ])
         return aug
 
     def preview_train(self):

@@ -1,2 +1,3 @@
+tqdm
 dataclasses-json
 albumentations

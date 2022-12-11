@@ -9,3 +9,7 @@ $ srun -K \
   --container-image=/netscratch/enroot/dlcc_pytorch_20.10.sqsh \
   --container-workdir="`pwd`" \
   python main.py
+
+# NOTES
+
+- Dataset sizes
