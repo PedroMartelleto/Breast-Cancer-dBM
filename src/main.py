@@ -13,27 +13,26 @@ import uuid
 import globals
 import json
 
-# TODO: Distributed training?
-
 def rand_uuid():
     return str(uuid.uuid4())[:8]
 
-def run_experiment(tune_config, exp_name, fold):
+def run_experiment(hyper_config, exp_name, fold, ray_tune=False):
     exp = ExperimentConfig(name=exp_name + "-" + rand_uuid(), 
                             device="cuda:0" if torch.cuda.is_available() else "cpu",
-                            num_epochs = tune_config["num_epochs"],
-                            batch_size = tune_config["batch_size"],
-                            learning_rate = tune_config["learning_rate"],
-                            momentum = tune_config["momentum"],
+                            num_epochs = hyper_config["num_epochs"],
+                            batch_size = hyper_config["batch_size"],
+                            learning_rate = hyper_config["learning_rate"],
+                            momentum = hyper_config["momentum"],
                             weight_decay = 0.0001,
-                            gamma = tune_config["gamma"],
-                            step_size = tune_config["step_size"],
-                            cv_fold = 0,
+                            gamma = hyper_config["gamma"],
+                            step_size = hyper_config["step_size"],
+                            cv_fold = fold,
                             betas = (0.9, 0.999),
                             seed = 42,
                             ds_name = "Dataset_BUSI_with_GT",
                             ds_num_classes = 3)
     exp.make_dir_if_necessary()
+    exp.save_config()
 
     device = torch.device(exp.device)
 
@@ -43,7 +42,7 @@ def run_experiment(tune_config, exp_name, fold):
     optim_context = OptimContextFactory.create_optimizer(model, exp)
 
     trainer = TrainHelper(fold=fold, device=device, ds=ds, exp_config=exp,
-                          model=model, optim_context=optim_context)
+                          model=model, optim_context=optim_context, ray_tune=ray_tune)
     trainer.train_and_validate()
 
 def tune_hyperparameters():
@@ -63,7 +62,7 @@ def tune_hyperparameters():
 
     print("Running {} trials...".format(num_samples))
     result = tune.run(
-        partial(run_experiment, exp_name="tune-hyp", fold=0),
+        partial(run_experiment, exp_name="tune-hyp", fold=0, ray_tune=True),
         resources_per_trial={"cpu": 4, "gpu": 1},
         config=hyper.search_space,
         num_samples=num_samples,
@@ -81,5 +80,44 @@ def tune_hyperparameters():
         print("Best trial final validation accuracy: {}".format(
             best_trial.last_result["accuracy"]))
 
+def calc_confusion_matrix(exp_name, fold):
+    hyper_config = hyper.get_tuned_hyperparams()
+    exp = ExperimentConfig(name=exp_name, 
+                            device="cuda:0" if torch.cuda.is_available() else "cpu",
+                            num_epochs = hyper_config["num_epochs"],
+                            batch_size = hyper_config["batch_size"],
+                            learning_rate = hyper_config["learning_rate"],
+                            momentum = hyper_config["momentum"],
+                            weight_decay = 0.0001,
+                            gamma = hyper_config["gamma"],
+                            step_size = hyper_config["step_size"],
+                            cv_fold = fold,
+                            betas = (0.9, 0.999),
+                            seed = 42,
+                            ds_name = "Dataset_BUSI_with_GT",
+                            ds_num_classes = 3)
+    device = torch.device(exp.device)
+    model = ModelFactory.create_model_from_checkpoint(exp_name, device, num_classes=exp.ds_num_classes)
+    ds = DatasetWrapper(os.path.join("ds", exp.ds_name), exp)
+
+    trainer = TrainHelper(fold=fold, device=device, ds=ds, exp_config=exp,
+                          model=model, optim_context=[None, None, None], ray_tune=False)
+    trainer.save_confusion_matrix()
+
 if __name__ == "__main__":
-    tune_hyperparameters()
+    # 1 - tune hyperparameters
+    # tune_hyperparameters()
+
+    # 2 - train cross-validation models
+    #for fold in range(5):
+    #    run_experiment(hyper.get_tuned_hyperparams(), "tuned-model-cv{}".format(fold), fold, ray_tune=False)
+
+    # 3 - calculate confusion matrices from each cross-validation model
+    #for fold in range(5):
+    #    calc_confusion_matrix(globals.CV_EXP_NAMES[fold], fold)
+    
+    # 4 - See ConfMatrix.ipynb
+
+    # 5 - use captum for model interpretation
+    #for fold in range(5):
+    # https://captum.ai/tutorials/Resnet_TorchVision_Interpret

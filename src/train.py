@@ -54,7 +54,7 @@ class OptimContextFactory:
         return loss_fn, optimizer_ft, exp_lr_scheduler
 
 class TrainHelper:
-    def __init__(self, fold, device, ds, exp_config, model, optim_context):
+    def __init__(self, fold, device, ds, exp_config, model, optim_context, ray_tune=False):
         self.fold = fold
         self.device = device
         self.ds = ds
@@ -63,6 +63,7 @@ class TrainHelper:
         self.loss_fn = optim_context[0]
         self.optimizer = optim_context[1]
         self.scheduler = optim_context[2]
+        self.ray_tune = ray_tune
 
     # One optimization/validation step that takes in batches from the data
     def optimizer_step(self, phase, inputs, labels):
@@ -96,6 +97,8 @@ class TrainHelper:
         self.running_corrects += torch.sum(preds == labels.data)
 
     def save_confusion_matrix(self):
+        self.model.eval()
+
         y_true = []
         y_pred = []
 
@@ -104,15 +107,19 @@ class TrainHelper:
             labels = labels.to(self.device)
             outputs = self.model(inputs)
             _, preds = torch.max(outputs, 1)
-            y_true.extend(list(labels.cpu().numpy()))
-            y_pred.extend(list(preds.cpu().numpy()))
+
+            y_true_batch = list(labels.data.cpu().numpy())
+            y_pred_batch = list(preds.cpu().numpy())
+
+            y_true.extend(y_true_batch)
+            y_pred.extend(y_pred_batch)
         
-        y_true = np.array(y_true)
-        y_pred = np.array(y_pred)
-        
-        cf_matrix = confusion_matrix(y_true, y_pred, labels=self.ds.class_names, normalize='true')
+        cf_matrix = confusion_matrix(y_true, y_pred, normalize='true')
         df_cm = pd.DataFrame(cf_matrix, index = [i for i in self.ds.class_names],
                             columns = [i for i in self.ds.class_names])
+
+        df_cm.to_csv(self.exp_config.filepath('conf_matrix_cv_' + str(self.fold) + '.csv'))
+        
         plt.figure(figsize = (7,7))
         sn.heatmap(df_cm, annot=True)
         plt.savefig(self.exp_config.filepath('conf_matrix_cv_' + str(self.fold) + '.png'))
@@ -177,8 +184,9 @@ class TrainHelper:
         # Save the best weights before returning
         self.model.load_state_dict(best_model_wts)
         self.model.eval()
-        torch.save(self.model.state_dict(), self.exp_config.filepath(f"best_model.pth"))
+        torch.save(self.model.state_dict(), self.exp_config.filepath("best_model.pth"))
 
-        tune.report(loss=best_loss, accuracy=best_acc)
+        if self.ray_tune:
+            tune.report(loss=best_loss, accuracy=best_acc)
 
         return self.model

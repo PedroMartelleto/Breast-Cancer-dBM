@@ -30,7 +30,7 @@ class ExperimentConfig:
     ds_name: str = "Dataset_BUSI_with_GT"
     ds_num_classes: int = 3
 
-    def save(self):
+    def save_config(self):
         with open(self.filepath("config.json"), "w") as f:
             f.write(self.to_json(indent=4))
     
