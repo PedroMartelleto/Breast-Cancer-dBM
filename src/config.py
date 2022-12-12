@@ -1,13 +1,22 @@
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
-from typing import List, Optional
+from typing import List, Optional, Dict
 import os
 import globals
+import json
 
 @dataclass_json
 @dataclass
-class TrainConfig:
+class ExperimentConfig:
+    @staticmethod
+    def load(exp_dir):
+        with open(os.path.join(globals.BASE_PATH, "experiments", exp_dir, "config.json"), "r") as f:
+            ret = ExperimentConfig.from_json(f.read())
+            return ret
+    
     name: str
+    device: str = "cuda:0"
+    dst_folder: str = os.path.join(globals.BASE_PATH, "experiments")
     num_epochs: int = 30
     batch_size: int = 32
     learning_rate: float = 0.001
@@ -18,28 +27,12 @@ class TrainConfig:
     cv_fold: int = 0
     betas: tuple = (0.9, 0.999)
     seed: int = 42
+    ds_name: str = "Dataset_BUSI_with_GT"
+    ds_num_classes: int = 3
 
-@dataclass_json
-@dataclass
-class ExperimentConfig:
-    @staticmethod
-    def load(filename):
-        with open(os.path.join(globals.BASE_PATH, filename), "r") as f:
-            return ExperimentConfig.from_json(f.read())
-    
-    name: str
-    device: str = "cuda:0"
-    train_configs: List = field(default_factory=list)
-    dst_folder: str = globals.BASE_PATH
-
-    def save(self, filename):
-        with open(self.filepath(filename), "w") as f:
+    def save(self):
+        with open(self.filepath("config.json"), "w") as f:
             f.write(self.to_json(indent=4))
-
-    def add_train_config(self, **kwargs):
-        train_config = TrainConfig("cv_" + str(kwargs["cv_fold"]), **kwargs)
-        self.train_configs.append(train_config)
-        return train_config
     
     def make_dir_if_necessary(self):
         if not os.path.exists(self.get_folder_path()):

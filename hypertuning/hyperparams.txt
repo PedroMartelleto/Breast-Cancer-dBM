@@ -1,0 +1,3 @@
+Best trial config: {'learning_rate': 0.00043037163456648473, 'momentum': 0.9737015837330235, 'batch_size': 32, 'step_size': 10, 'num_epochs': 40, 'gamma': 0.44135432600813673}
+Best trial final validation loss: 0.4427750721955911
+Best trial final validation accuracy: 0.8589743589743589

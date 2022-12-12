@@ -1,8 +1,11 @@
+from ray import tune
+import numpy as np
+
 search_space = {
-    'learning_rate': hp.uniform('learning_rate', 0.0001, 0.1),
-    'weight_decay': hp.uniform('weight_decay', 0.0001, 0.1),
-    'momentum': hp.uniform('momentum', 0.1, 0.9),
-    'batch_size': hp.choice('batch_size', [32, 64, 128, 256, 512]),
-    'num_epochs': hp.choice('num_epochs', [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]),
-    'cv_fold': hp.choice('cv_fold', [0, 1, 2, 3, 4]),
+    "learning_rate": tune.loguniform(1e-4, 1e-1),
+    "momentum": tune.uniform(0.9, 0.99),
+    "batch_size": tune.choice([8, 16, 32, 64]),
+    "step_size": tune.choice([5, 10, 15, 20]),
+    "num_epochs": tune.choice([10, 20, 30, 40, 50, 60]),
+    "gamma": tune.uniform(0.1, 0.9)
 }
