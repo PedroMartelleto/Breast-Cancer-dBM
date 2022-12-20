@@ -1,7 +1,6 @@
 import torch
 from torchvision.models import resnet50, ResNet50_Weights
 import matplotlib.pyplot as plt
-import torch
 import torchvision
 from torchvision import datasets, transforms
 import numpy as np
@@ -17,10 +16,6 @@ import albumentations as A
 from sklearn.model_selection import KFold
 from torch.utils.data import SubsetRandomSampler, ConcatDataset, DataLoader
 import globals
-
-# Because we are fine-tuning from ImageNet...
-NORM_MEAN = [0.485, 0.456, 0.406]
-NORM_STD = [0.229, 0.224, 0.225]
 
 # Helper class for data augmentation
 class AugDataset(datasets.ImageFolder):
@@ -46,9 +41,11 @@ class AugDataset(datasets.ImageFolder):
 
 class DatasetWrapper:
     def __init__(self, path, exp_config):
-        transform = transforms.Compose([ transforms.CenterCrop(224),
+        transform = transforms.Compose([
+                            transforms.Resize(256),
+                            transforms.CenterCrop(224),
                             transforms.ToTensor(),
-                            transforms.Normalize(mean=NORM_MEAN, std=NORM_STD) ])
+                            transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
 
         self.path = os.path.join(globals.BASE_PATH, path)
         self.dataset = AugDataset(self.path, aug=None, transform=transform)
@@ -83,12 +80,14 @@ class DatasetWrapper:
     
     def get_aug(self):        
         aug = A.Compose([
-                        A.ShiftScaleRotate(shift_limit=0.005, scale_limit=0.05, rotate_limit=8, p=0.7),
-                        A.CoarseDropout(max_holes=4, max_height=8, max_width=8, fill_value=0, p=0.5),
-                        A.Sharpen(alpha=(0.05, 0.1), lightness=(0.95, 1.05), p=0.5),
+                        A.Resize(256, 256),
+                        A.ShiftScaleRotate(shift_limit=0.008, scale_limit=0.2, rotate_limit=30, p=0.7),
+                        A.CoarseDropout(max_holes=8, max_height=8, max_width=8, fill_value=0, p=0.5),
+                        A.Sharpen(alpha=(0.05, 0.1), lightness=(0.9, 1.1), p=0.5),
+                        A.Blur(blur_limit=3, p=0.5),
                         A.PadIfNeeded(224, 224),
                         A.RandomCrop(width=224, height=224),
-                        A.Normalize(mean=NORM_MEAN, std=NORM_STD)
+                        A.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD)
                     ])
         return aug
 

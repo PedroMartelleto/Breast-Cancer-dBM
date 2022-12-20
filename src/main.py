@@ -12,25 +12,47 @@ from functools import partial
 import uuid
 import globals
 import json
+from explainability import Explainer
+from PIL import Image
+import ray
+from torchvision.models import resnet50, ResNet50_Weights
+import matplotlib.pyplot as plt
+import torchvision
+from torchvision import datasets, transforms
+import numpy as np
+import os
+import torch.nn as nn
+import torch.optim as optim
+from torch.optim import lr_scheduler
+import numpy as np
+from sklearn.manifold import TSNE
+from sklearn.preprocessing import MinMaxScaler
+import pandas as pd
+import albumentations as A
+from sklearn.model_selection import KFold
+from torch.utils.data import SubsetRandomSampler, ConcatDataset, DataLoader
+from datasets import AugDataset
+from ray.tune.trainable.session import get_trial_id
+from tqdm import tqdm
 
 def rand_uuid():
     return str(uuid.uuid4())[:8]
 
-def run_experiment(hyper_config, exp_name, fold, ray_tune=False):
-    exp = ExperimentConfig(name=exp_name + "-" + rand_uuid(), 
-                            device="cuda:0" if torch.cuda.is_available() else "cpu",
-                            num_epochs = hyper_config["num_epochs"],
-                            batch_size = hyper_config["batch_size"],
-                            learning_rate = hyper_config["learning_rate"],
-                            momentum = hyper_config["momentum"],
-                            weight_decay = 0.0001,
-                            gamma = hyper_config["gamma"],
-                            step_size = hyper_config["step_size"],
-                            cv_fold = fold,
-                            betas = (0.9, 0.999),
-                            seed = 42,
-                            ds_name = "Dataset_BUSI_with_GT",
-                            ds_num_classes = 3)
+def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42):
+    exp = ExperimentConfig(name=exp_name + ((get_trial_id()) if ray_tune else ""), 
+                           device="cuda:0" if torch.cuda.is_available() else "cpu",
+                           num_epochs = hyper_config["num_epochs"],
+                           batch_size = hyper_config["batch_size"],
+                           learning_rate = hyper_config["learning_rate"],
+                           momentum = hyper_config["momentum"],
+                           weight_decay = 0.0001,
+                           gamma = hyper_config["gamma"],
+                           step_size = hyper_config["step_size"],
+                           cv_fold = fold,
+                           betas = (0.9, 0.999),
+                           seed = seed,
+                           ds_name = "Dataset_BUSI_with_GT",
+                           ds_num_classes = 3)
     exp.make_dir_if_necessary()
     exp.save_config()
 
@@ -41,7 +63,7 @@ def run_experiment(hyper_config, exp_name, fold, ray_tune=False):
 
     optim_context = OptimContextFactory.create_optimizer(model, exp)
 
-    trainer = TrainHelper(fold=fold, device=device, ds=ds, exp_config=exp,
+    trainer = TrainHelper(device=device, ds=ds, exp_config=exp,
                           model=model, optim_context=optim_context, ray_tune=ray_tune)
     trainer.train_and_validate()
 
@@ -57,12 +79,12 @@ def tune_hyperparameters():
 
     reporter = CLIReporter(
         metric_columns=["loss", "accuracy", "training_iteration"])
-    
-    num_samples = 30
+
+    num_samples = 40
 
     print("Running {} trials...".format(num_samples))
     result = tune.run(
-        partial(run_experiment, exp_name="tune-hyp", fold=0, ray_tune=True),
+        partial(run_experiment, exp_name="NEW-tune", fold=0, ray_tune=True),
         resources_per_trial={"cpu": 4, "gpu": 1},
         config=hyper.search_space,
         num_samples=num_samples,
@@ -80,9 +102,8 @@ def tune_hyperparameters():
         print("Best trial final validation accuracy: {}".format(
             best_trial.last_result["accuracy"]))
 
-def calc_confusion_matrix(exp_name, fold):
-    hyper_config = hyper.get_tuned_hyperparams()
-    exp = ExperimentConfig(name=exp_name, 
+def create_exp(exp_name, hyper_config, fold):
+    return ExperimentConfig(name=exp_name, 
                             device="cuda:0" if torch.cuda.is_available() else "cpu",
                             num_epochs = hyper_config["num_epochs"],
                             batch_size = hyper_config["batch_size"],
@@ -96,28 +117,76 @@ def calc_confusion_matrix(exp_name, fold):
                             seed = 42,
                             ds_name = "Dataset_BUSI_with_GT",
                             ds_num_classes = 3)
+
+def calc_confusion_matrix(exp_name, fold):
+    hyper_config = hyper.get_tuned_hyperparams()
+    
+    exp = create_exp(exp_name, hyper_config, fold)
     device = torch.device(exp.device)
     model = ModelFactory.create_model_from_checkpoint(exp_name, device, num_classes=exp.ds_num_classes)
     ds = DatasetWrapper(os.path.join("ds", exp.ds_name), exp)
 
-    trainer = TrainHelper(fold=fold, device=device, ds=ds, exp_config=exp,
+    trainer = TrainHelper(device=device, ds=ds, exp_config=exp,
                           model=model, optim_context=[None, None, None], ray_tune=False)
     trainer.save_confusion_matrix()
 
+# bash script one-liner that removes all folders with only one file in them named "config.json"
+# shopt -s globstar; for d in **/; do f=("$d"/*); [[ ${#f[@]} -eq 1 && -f "$f" && "${f##*/}" =~ ^config.json$ ]] && rm -r -- "$d"; done
+
+def interpret_model():
+    exp = create_exp(globals.RANDOM_INIT_EXP_NAMES[0], hyper.get_tuned_hyperparams(), 0)
+    device = torch.device(exp.device)
+    model = ModelFactory.create_model_from_checkpoint(globals.RANDOM_INIT_EXP_NAMES[0], "cuda:0", num_classes=exp.ds_num_classes)
+    ds = DatasetWrapper(os.path.join("ds", exp.ds_name), exp)
+
+    explainer = Explainer(model, device, ds)
+    prefix = "/netscratch/martelleto/ultrasound/explain/"
+
+    # Iterate over images in test set folder
+    for root, dirs, files in os.walk(globals.TEST_DS_PATH):
+        for file in tqdm(files):
+            img = Image.open(os.path.join(root, file))
+            explainer.shap(img, os.path.join(prefix, "SHAP_" + file))
+            explainer.occlusion(img, os.path.join(prefix, "OCC_" + file))
+            explainer.noise_tunnel(img, os.path.join(prefix, "NT_" + file))
+            explainer.gradcam(img, os.path.join(prefix, "GRAD_" + file))
+
+def random_inits():
+    hyper_config = hyper.get_tuned_hyperparams()
+    
+    # Use ray to train multiple experiments in parallel with different seeds
+    for seed in globals.SEEDS:
+        run_experiment(hyper_config, exp_name=f"NEW-random-{seed}", fold=0, seed=seed, ray_tune=False)
+
+def calc_conf_matrix_for_exp(exp_name, ds):
+    device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
+    best_model = ModelFactory.create_model_from_checkpoint(exp_name, device, num_classes=3)
+    class_names = list(ds.class_to_idx.keys())
+    test_loader = DataLoader(ds, batch_size=128)
+    exp = create_exp(exp_name, hyper.get_tuned_hyperparams(), 0)
+
+    trainer = TrainHelper(device=device, ds=None, exp_config=exp,
+                          model=best_model, optim_context=[None, None, None], ray_tune=False)
+    trainer.save_confusion_matrix(test_loader, exp_name, class_names)
+
 if __name__ == "__main__":
     # 1 - tune hyperparameters
-    # tune_hyperparameters()
+    #tune_hyperparameters()
 
-    # 2 - train cross-validation models
-    #for fold in range(5):
-    #    run_experiment(hyper.get_tuned_hyperparams(), "tuned-model-cv{}".format(fold), fold, ray_tune=False)
+    # 2 - random inits
+    #random_inits()
 
-    # 3 - calculate confusion matrices from each cross-validation model
-    #for fold in range(5):
-    #    calc_confusion_matrix(globals.CV_EXP_NAMES[fold], fold)
+    # 3 - calculate confusion matrices from repeated experiments
+    #transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
+    #for seed in globals.SEEDS:
+    #    ds = AugDataset(globals.TEST_DS_PATH, aug=None, transform=transform)
+    #    calc_conf_matrix_for_exp(f"NEW-random-{seed}", ds)
     
     # 4 - See ConfMatrix.ipynb
 
     # 5 - use captum for model interpretation
-    #for fold in range(5):
+    # interpret_model()
+
+    # 6 - deploy to HF spaces & gradio.app
+
     # https://captum.ai/tutorials/Resnet_TorchVision_Interpret

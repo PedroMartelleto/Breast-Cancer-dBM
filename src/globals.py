@@ -1,10 +1,13 @@
+import os
+
 BASE_PATH = "/netscratch/martelleto/ultrasound"
 
-# Name of final cross-validation experiments
-CV_EXP_NAMES = [
-    "tuned-model-cv0-0ebe7532",
-    "tuned-model-cv1-5765c094",
-    "tuned-model-cv2-9d6ef30d",
-    "tuned-model-cv3-92b6e578",
-    "tuned-model-cv4-0e9a9d88"
-]
+# Because we are fine-tuning from ImageNet...
+NORM_MEAN = [0.485, 0.456, 0.406]
+NORM_STD = [0.229, 0.224, 0.225]
+
+DS_PATH = os.path.join(BASE_PATH, "ds", "Dataset_BUSI_with_GT")
+TEST_DS_PATH = os.path.join(BASE_PATH, "ds", "Dataset_BUSI_with_GT_test")
+
+SEEDS = [8974274, 6859559, 917234, 8458981, 3240563, 7103588, 5232396, 3991434, 2158036, 5012237]
+RANDOM_INIT_EXP_NAMES = [f"NEW-random-{seed}" for seed in SEEDS]

@@ -54,8 +54,7 @@ class OptimContextFactory:
         return loss_fn, optimizer_ft, exp_lr_scheduler
 
 class TrainHelper:
-    def __init__(self, fold, device, ds, exp_config, model, optim_context, ray_tune=False):
-        self.fold = fold
+    def __init__(self, device, ds, exp_config, model, optim_context, ray_tune=False):
         self.device = device
         self.ds = ds
         self.model = model
@@ -96,13 +95,13 @@ class TrainHelper:
         self.running_loss += loss.item() * inputs.size(0)
         self.running_corrects += torch.sum(preds == labels.data)
 
-    def save_confusion_matrix(self):
+    def save_confusion_matrix(self, dataloader, conf_name, class_names):
         self.model.eval()
 
         y_true = []
         y_pred = []
 
-        for inputs, labels in self.ds.dataloaders['val'][self.exp_config.cv_fold]:
+        for inputs, labels in dataloader:
             inputs = inputs.to(self.device)
             labels = labels.to(self.device)
             outputs = self.model(inputs)
@@ -115,14 +114,14 @@ class TrainHelper:
             y_pred.extend(y_pred_batch)
         
         cf_matrix = confusion_matrix(y_true, y_pred, normalize='true')
-        df_cm = pd.DataFrame(cf_matrix, index = [i for i in self.ds.class_names],
-                            columns = [i for i in self.ds.class_names])
+        df_cm = pd.DataFrame(cf_matrix, index = [i for i in class_names],
+                            columns = [i for i in class_names])
 
-        df_cm.to_csv(self.exp_config.filepath('conf_matrix_cv_' + str(self.fold) + '.csv'))
+        df_cm.to_csv(self.exp_config.filepath(f'conf_matrix_{conf_name}.csv'))
         
         plt.figure(figsize = (7,7))
         sn.heatmap(df_cm, annot=True)
-        plt.savefig(self.exp_config.filepath('conf_matrix_cv_' + str(self.fold) + '.png'))
+        plt.savefig(self.exp_config.filepath(f'conf_matrix_{conf_name}.png'))
 
     # The main function of this class. Call this to train self.model with the
     # specified optimizer, loss_fn, num_epochs and learning rate scheduler
@@ -184,7 +183,7 @@ class TrainHelper:
         # Save the best weights before returning
         self.model.load_state_dict(best_model_wts)
         self.model.eval()
-        torch.save(self.model.state_dict(), self.exp_config.filepath("best_model.pth"))
+        torch.save(self.model.state_dict(), self.exp_config.filepath("best_model"))
 
         if self.ray_tune:
             tune.report(loss=best_loss, accuracy=best_acc)
