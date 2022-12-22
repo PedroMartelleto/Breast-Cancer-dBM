@@ -20,7 +20,7 @@ from tqdm import tqdm
 def rand_uuid():
     return str(uuid.uuid4())[:8]
 
-def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42):
+def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42, imageNet=True):
     exp = ExperimentConfig(name=exp_name + ((get_trial_id()) if ray_tune else ""), 
                            device="cuda:0" if torch.cuda.is_available() else "cpu",
                            num_epochs = hyper_config["num_epochs"],
@@ -40,7 +40,7 @@ def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42):
 
     device = torch.device(exp.device)
 
-    model = ModelFactory.create_model(device, num_classes=exp.ds_num_classes)
+    model = ModelFactory.create_model(device, num_classes=exp.ds_num_classes, imageNet=imageNet)
     ds = DatasetWrapper(os.path.join("ds", exp.ds_name), exp)
 
     optim_context = OptimContextFactory.create_optimizer(model, exp)
@@ -66,7 +66,7 @@ def tune_hyperparameters():
 
     print("Running {} trials...".format(num_samples))
     result = tune.run(
-        partial(run_experiment, exp_name="NEW-tune", fold=0, ray_tune=True),
+        partial(run_experiment, exp_name="no-imagenet-tune", fold=0, ray_tune=True, imageNet=False),
         resources_per_trial={"cpu": 4, "gpu": 1},
         config=hyper.search_space,
         num_samples=num_samples,
@@ -134,11 +134,11 @@ def interpret_model():
             explainer.gradcam(img, os.path.join(prefix, "GRAD_" + file))
 
 def random_inits():
-    hyper_config = hyper.get_tuned_hyperparams()
+    hyper_config = hyper.get_tuned_hyperparams("nofinetune_tune")
     
     # Use ray to train multiple experiments in parallel with different seeds
     for seed in globals.SEEDS:
-        run_experiment(hyper_config, exp_name=f"NEW-random-{seed}", fold=0, seed=seed, ray_tune=False)
+        run_experiment(hyper_config, exp_name=f"noimagenet-random-{seed}", fold=0, seed=seed, ray_tune=False)
 
 def calc_conf_matrix_for_exp(exp_name, ds):
     device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
@@ -153,16 +153,18 @@ def calc_conf_matrix_for_exp(exp_name, ds):
 
 if __name__ == "__main__":
     # 1 - tune hyperparameters
-    #tune_hyperparameters()
+    tune_hyperparameters()
+
+    # TODO SimCLR optionally
 
     # 2 - random inits
-    #random_inits()
+    random_inits()
 
     # 3 - calculate confusion matrices from repeated experiments
     #transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
     #for seed in globals.SEEDS:
     #    ds = AugDataset(globals.TEST_DS_PATH, aug=None, transform=transform)
-    #    calc_conf_matrix_for_exp(f"NEW-random-{seed}", ds)
+    #    calc_conf_matrix_for_exp(f"noimagenet-random-{seed}", ds)
     
     # 4 - See ConfMatrix.ipynb
 

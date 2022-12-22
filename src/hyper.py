@@ -11,7 +11,7 @@ search_space = {
     "gamma": tune.uniform(0.1, 0.9)
 }
 
-def get_tuned_hyperparams():
-    with open("results/tune_hypers.json", "r") as f:
+def get_tuned_hyperparams(name):
+    with open(f"results/{name}", "r") as f:
         best_config = json.load(f)
         return best_config
