@@ -12,6 +12,6 @@ search_space = {
 }
 
 def get_tuned_hyperparams(name):
-    with open(f"results/{name}", "r") as f:
+    with open(f"results/{name}.json", "r") as f:
         best_config = json.load(f)
         return best_config

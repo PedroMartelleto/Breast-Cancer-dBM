@@ -15,6 +15,7 @@ from torchvision import datasets, transforms
 import os
 from torch.utils.data import DataLoader
 from ray.tune.trainable.session import get_trial_id
+from datasets import AugDataset
 from tqdm import tqdm
 
 def rand_uuid():
@@ -134,7 +135,7 @@ def interpret_model():
             explainer.gradcam(img, os.path.join(prefix, "GRAD_" + file))
 
 def random_inits():
-    hyper_config = hyper.get_tuned_hyperparams("nofinetune_tune")
+    hyper_config = hyper.get_tuned_hyperparams("nofinetune_tune_hypers")
     
     # Use ray to train multiple experiments in parallel with different seeds
     for seed in globals.SEEDS:
@@ -145,7 +146,7 @@ def calc_conf_matrix_for_exp(exp_name, ds):
     best_model = ModelFactory.create_model_from_checkpoint(exp_name, device, num_classes=3)
     class_names = list(ds.class_to_idx.keys())
     test_loader = DataLoader(ds, batch_size=128)
-    exp = create_exp(exp_name, hyper.get_tuned_hyperparams(), 0)
+    exp = create_exp(exp_name, hyper.get_tuned_hyperparams("nofinetune_tune_hypers"), 0)
 
     trainer = TrainHelper(device=device, ds=None, exp_config=exp,
                           model=best_model, optim_context=[None, None, None], ray_tune=False)
@@ -153,12 +154,10 @@ def calc_conf_matrix_for_exp(exp_name, ds):
 
 if __name__ == "__main__":
     # 1 - tune hyperparameters
-    tune_hyperparameters()
-
-    # TODO SimCLR optionally
+    #tune_hyperparameters()
 
     # 2 - random inits
-    random_inits()
+    #random_inits()
 
     # 3 - calculate confusion matrices from repeated experiments
     #transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
