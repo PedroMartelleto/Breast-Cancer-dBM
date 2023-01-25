@@ -1,7 +1,6 @@
-./deploy_experiments.sh
 srun -K \
-    --partition=A100-40GB \
-    --mem-per-cpu=6G \
+    --partition=RTX2080Ti \
+    --mem-per-cpu=16G \
     --ntasks=1 \
     --cpus-per-task=4 \
     --gpus-per-task=1 \
@@ -9,4 +8,4 @@ srun -K \
     --container-image=/netscratch/enroot/nvcr.io_nvidia_pytorch_22.11-py3.sqsh \
     --container-workdir="`pwd`" \
     --container-mounts="`pwd`":"`pwd`",/netscratch:/netscratch/ \
-    install.sh python src/main.py
+    install.sh python main.py

@@ -16,18 +16,49 @@ import albumentations as A
 from sklearn.model_selection import KFold
 from torch.utils.data import SubsetRandomSampler, ConcatDataset, DataLoader
 import globals
+import PIL
+from tqdm import tqdm
+from torch.utils.data import Dataset
 
+# TODO: Pre-load all of the data
 # Helper class for data augmentation
-class AugDataset(datasets.ImageFolder):
-    def __init__(self, root, aug, *args, **kwargs):
-        super(AugDataset, self).__init__(root, *args, **kwargs)
+class AugDataset(Dataset):
+    def __init__(self, root, aug, transform, *args, **kwargs):
         self.aug = aug
+        self.image_list = []
+
+        # Load all images 
+        self.classes = os.listdir(root)
+        print(self.classes)
+        assert len(self.classes) > 0, "No classes found in the dataset"
+        assert len(self.classes) == 3, "Expected 3 classes, found " + str(len(self.classes))
+
+        for class_name in self.classes:
+            print("Loading images for class: ", class_name, " ...")
+            class_path = os.path.join(root, class_name)
+            for image_name in tqdm(os.listdir(class_path)):
+                image_path = os.path.join(class_path, image_name)
+                img_loaded = PIL.Image.open(image_path).convert('RGB')
+
+                if transform:
+                    img_loaded = transform(img_loaded)
+                else:
+                    img_loaded = np.array(img_loaded)
+
+                assert 'mask' not in image_name, "Expected image, found mask"
+                self.image_list.append((img_loaded, class_name))
+        
+        self.class_to_idx = {classname: i for i, classname in enumerate(self.classes)}
+
+    def __len__(self):
+        return len(self.image_list)
 
     def __getitem__(self, idx):
-        image, label = super(AugDataset, self).__getitem__(idx)
+        image, label = self.image_list[idx]
+        label = self.class_to_idx[label]
 
         if self.aug:
-            augmented = self.aug(image=np.array(image.convert('RGB')))
+            augmented = self.aug(image=image)
             image = augmented['image']
             image = np.transpose(image, (2, 0, 1)).astype(np.float32)
             image = torch.tensor(image, dtype=torch.float)
@@ -59,7 +90,7 @@ class DatasetWrapper:
 
         splits = KFold(n_splits=5, shuffle=True, random_state=exp_config.seed)
 
-        self.aug_dataset = AugDataset(self.path, aug=self.get_aug())
+        self.aug_dataset = AugDataset(self.path, transform=None, aug=self.get_aug())
         self.train_loaders = []
         self.test_loaders = []
 
@@ -71,12 +102,6 @@ class DatasetWrapper:
 
         self.dataloaders = {'train': self.train_loaders, 'val': self.test_loaders}
         self.sizes = {'train': self.train_size, 'val': self.val_size}
-
-        # We are not using the masks currently, so it is important to ensure no masks were left in the dataset
-        for (sample_name, _) in self.dataset.samples:
-            assert 'mask' not in os.path.basename(sample_name)
-            # assert file ends with .png
-            assert sample_name.endswith('.png')
     
     def get_aug(self):        
         aug = A.Compose([

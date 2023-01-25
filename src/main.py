@@ -138,8 +138,8 @@ def random_inits():
     hyper_config = hyper.get_tuned_hyperparams("nofinetune_tune_hypers")
     
     # Use ray to train multiple experiments in parallel with different seeds
-    for seed in globals.SEEDS:
-        run_experiment(hyper_config, exp_name=f"noimagenet-random-{seed}", fold=0, seed=seed, ray_tune=False)
+    for seed in globals.SEEDS[0:1]:
+        run_experiment(hyper_config, exp_name=f"IGNORE_____noimagenet-random-{seed}", fold=0, seed=seed, ray_tune=False)
 
 def calc_conf_matrix_for_exp(exp_name, ds):
     device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
@@ -152,12 +152,14 @@ def calc_conf_matrix_for_exp(exp_name, ds):
                           model=best_model, optim_context=[None, None, None], ray_tune=False)
     trainer.save_confusion_matrix(test_loader, exp_name, class_names)
 
+#def remove_first_order_feats():
+
 if __name__ == "__main__":
     # 1 - tune hyperparameters
     #tune_hyperparameters()
 
     # 2 - random inits
-    #random_inits()
+    random_inits()
 
     # 3 - calculate confusion matrices from repeated experiments
     #transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])

@@ -1,10 +1,15 @@
 # Moves benign (x) to benign/benign (x), ...
 
 import os
-# TODO: This script is wrong or has ran twice???
+import globals
+
+DS_PATH = os.path.join(globals.BASE_PATH, "ds/original_ds/INV_MASKED_Dataset_BUSI_with_GT_test")
+
 # Get class
-for root, dirs, files in os.walk("/netscratch/martelleto/ultrasound/ds/Dataset_BUSI_with_GT_test"):
+for root, dirs, files in os.walk(DS_PATH):
     if len(dirs) > 0:
+        print("Dataset already split into folders")
+        print("Skipping " + root)
         exit(0)
 
     for file in files:
