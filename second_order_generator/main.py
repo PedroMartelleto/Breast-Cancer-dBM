@@ -11,8 +11,8 @@ from scipy.ndimage import gaussian_filter
 suffix = ""
 INV_MODE = True
 DS_PATH = '/netscratch/martelleto/ultrasound/ds/original_ds/Dataset_BUSI_with_GT' + suffix
-DESTINATION_PATH = '/netscratch/martelleto/ultrasound/ds/original_ds/INV_MASKED_Dataset_BUSI_with_GT' + suffix
-SIGMA = 8
+DESTINATION_PATH = '/netscratch/martelleto/ultrasound/ds/original_ds/V2_INV_MASKED_Dataset_BUSI_with_GT' + suffix
+SIGMA = 16
 
 avg_img = np.zeros((224, 224, 3), dtype=np.float32)
 num_images = 0
@@ -64,16 +64,23 @@ for classname in os.listdir(DS_PATH):
         os.makedirs(os.path.join(DESTINATION_PATH, classname))
 
     for file in tqdm(os.listdir(os.path.join(DS_PATH, classname))):
-        if 'mask' in file:
-            continue
+        if 'mask' in file: continue
 
         num_images += 1
 
         # Load image
         img = load_image(os.path.join(DS_PATH, classname, file))
-
-        # rolling average
-        avg_img = (avg_img * (num_images - 1) + img) / num_images
+        mask = load_image(os.path.join(DS_PATH, classname, file.replace('.png', '_mask.png')))
+        mask = gaussian_filter(mask, sigma=SIGMA)
+        
+        # Save masked image and inverted masked image
+        if not INV_MODE:
+            img_masked = apply_mask(0, os.path.join(DS_PATH, classname, file), img, avg_img, inverse=False)
+        else:
+            img_masked = apply_mask(0, os.path.join(DS_PATH, classname, file), img, avg_img, inverse=True)
+        
+        # Rolling average using avg_img
+        avg_img = (avg_img * (num_images - 1) + img_masked) / num_images
 
 # Save average image
 save_image(os.path.join(DESTINATION_PATH, 'avgimg' + suffix + '.png'), avg_img)
@@ -86,8 +93,6 @@ for classname in os.listdir(DS_PATH):
     for file in tqdm(os.listdir(os.path.join(DS_PATH, classname))):
         if 'mask' in file:
             continue
-
-        num_images += 1
 
         # Load image
         img = load_image(os.path.join(DS_PATH, classname, file))

@@ -34,7 +34,7 @@ def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42, imageN
                            cv_fold = fold,
                            betas = (0.9, 0.999),
                            seed = seed,
-                           ds_name = "Dataset_BUSI_with_GT",
+                           ds_name = "original_ds/INV_MASKED_Dataset_BUSI_with_GT",
                            ds_num_classes = 3)
     exp.make_dir_if_necessary()
     exp.save_config()
@@ -67,7 +67,7 @@ def tune_hyperparameters():
 
     print("Running {} trials...".format(num_samples))
     result = tune.run(
-        partial(run_experiment, exp_name="no-imagenet-tune", fold=0, ray_tune=True, imageNet=False),
+        partial(run_experiment, exp_name="imagenet-tune", fold=0, ray_tune=True, imageNet=True),
         resources_per_trial={"cpu": 4, "gpu": 1},
         config=hyper.search_space,
         num_samples=num_samples,
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     #tune_hyperparameters()
 
     # 2 - random inits
-    random_inits()
+    #random_inits()
 
     # 3 - calculate confusion matrices from repeated experiments
     #transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
