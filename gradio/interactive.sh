@@ -10,3 +10,5 @@ srun -K \
     --container-workdir="`pwd`" \
     --container-mounts="`pwd`":"`pwd`",/netscratch:/netscratch/ \
     --pty /bin/bash
+
+// 192.168.92.189
