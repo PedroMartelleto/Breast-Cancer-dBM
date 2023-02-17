@@ -108,7 +108,7 @@ def create_model_from_checkpoint():
     # Loads a model from a checkpoint
     model = resnet50()
     model.fc = nn.Linear(model.fc.in_features, 3)
-    model.load_state_dict(torch.load("best_model", map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load("best_model.h5", map_location=torch.device('cpu')))
     model.eval()
     return model
 
@@ -136,5 +136,6 @@ ui = gr.Interface(fn=predict,
                           ["malignant (127).png", 50, 0.0001, 8, 15],
                           ["malignant (201).png", 50, 0.0001, 8, 15],
                           ["normal (81).png", 50, 0.0001, 8, 15], 
-                          ["normal (101).png", 50, 0.0001, 8, 15]]).launch()
+                          ["normal (101).png", 50, 0.0001, 8, 15]])
+
 ui.launch(share=False, server_name="0.0.0.0")
