@@ -34,7 +34,7 @@ def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42, imageN
                            cv_fold = fold,
                            betas = (0.9, 0.999),
                            seed = seed,
-                           ds_name = "original_ds/INV_MASKED_Dataset_BUSI_with_GT",
+                           ds_name = "original_ds/Result_DS",
                            ds_num_classes = 3)
     exp.make_dir_if_necessary()
     exp.save_config()
@@ -63,17 +63,17 @@ def tune_hyperparameters():
     reporter = CLIReporter(
         metric_columns=["loss", "accuracy", "training_iteration"])
 
-    num_samples = 40
+    num_samples = 10
 
     print("Running {} trials...".format(num_samples))
     result = tune.run(
-        partial(run_experiment, exp_name="imagenet-tune", fold=0, ray_tune=True, imageNet=True),
+        partial(run_experiment, exp_name="rects-tune", fold=0, ray_tune=True, imageNet=True),
         resources_per_trial={"cpu": 4, "gpu": 1},
         config=hyper.search_space,
         num_samples=num_samples,
         scheduler=scheduler,
-        progress_reporter=reporter,
-        checkpoint_at_end=True)
+        progress_reporter=reporter)
+        # checkpoint_at_end=True)
     
     best_trial = result.get_best_trial("loss", "min", "last")
     print("Best trial config: {}".format(best_trial.config))
@@ -139,7 +139,7 @@ def random_inits():
     
     # Use ray to train multiple experiments in parallel with different seeds
     for seed in globals.SEEDS[0:1]:
-        run_experiment(hyper_config, exp_name=f"IGNORE_____noimagenet-random-{seed}", fold=0, seed=seed, ray_tune=False)
+        run_experiment(hyper_config, exp_name=f"noimagenet-random-{seed}", fold=0, seed=seed, ray_tune=False)
 
 def calc_conf_matrix_for_exp(exp_name, ds):
     device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
@@ -156,10 +156,10 @@ def calc_conf_matrix_for_exp(exp_name, ds):
 
 if __name__ == "__main__":
     # 1 - tune hyperparameters
-    #tune_hyperparameters()
+    tune_hyperparameters()
 
     # 2 - random inits
-    #random_inits()
+    # random_inits()
 
     # 3 - calculate confusion matrices from repeated experiments
     #transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])

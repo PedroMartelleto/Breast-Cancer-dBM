@@ -8,4 +8,4 @@ srun -K \
     --container-image=/netscratch/enroot/nvcr.io_nvidia_pytorch_22.11-py3.sqsh \
     --container-workdir="`pwd`" \
     --container-mounts="`pwd`":"`pwd`",/netscratch:/netscratch/ \
-    install.sh python main.py
+    install.sh python random_rect_gen.py

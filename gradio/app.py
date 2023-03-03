@@ -11,6 +11,8 @@ import torch.nn as nn
 import torch
 import numpy as np
 
+MODEL_NAMES = ["imagenet_finetuned", "not_finetuned", "masked_model"]
+
 class Explainer:
     def __init__(self, model, img, class_names):
         self.model = model
@@ -66,7 +68,7 @@ class Explainer:
         return self.convert_fig_to_pil(fig)
 
     def occlusion(self, stride, sliding_window):
-        occlusion = Occlusion(model)
+        occlusion = Occlusion(self.model)
 
         attributions_occ = occlusion.attribute(self.input,
                                                target=self.pred_label_idx,
@@ -104,38 +106,64 @@ class Explainer:
         fig.suptitle("GradCAM layer3[1].conv2 | " + self.fig_title, fontsize=12)
         return self.convert_fig_to_pil(fig)
 
-def create_model_from_checkpoint():
+def create_model_from_checkpoint(model_name):
     # Loads a model from a checkpoint
     model = resnet50()
     model.fc = nn.Linear(model.fc.in_features, 3)
-    model.load_state_dict(torch.load("best_model.h5", map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load(model_name, map_location=torch.device('cpu')))
     model.eval()
     return model
 
-model = create_model_from_checkpoint()
+preloaded_models = {}
 labels = [ "benign", "malignant", "normal" ]
 
-def predict(img, shap_samples, shap_stdevs, occlusion_stride, occlusion_window):
-    explainer = Explainer(model, img, labels)
-    return [explainer.confidences,
+def predict(img, model_name, true_label, shap_samples, shap_stdevs, occlusion_stride, occlusion_window):
+    if not model_name in preloaded_models:
+        preloaded_models[model_name] = create_model_from_checkpoint(model_name + ".h5")
+    
+    explainer = Explainer(preloaded_models[model_name], img, labels)
+    
+    return [
+            explainer.confidences,
+            "True label: " + true_label,
             explainer.shap(shap_samples, shap_stdevs),
             explainer.occlusion(occlusion_stride, occlusion_window),
-            explainer.gradcam()] 
+            explainer.gradcam()
+        ]
+
+examples = [
+    ["examples/original/benign/benign (52).png", "imagenet_finetuned", "benign", 50, 0.0001, 8, 15],
+    ["examples/original/benign/benign (243).png", "imagenet_finetuned", "benign", 50, 0.0001, 8, 15],
+    ["examples/original/malignant/malignant (149).png", "imagenet_finetuned", "malignant", 50, 0.0001, 8, 15],
+    ["examples/original/malignant/malignant (201).png", "imagenet_finetuned", "malignant", 50, 0.0001, 8, 15],
+    ["examples/original/normal/normal (100).png", "imagenet_finetuned", "normal", 50, 0.0001, 8, 15], 
+    ["examples/original/normal/normal (101).png", "imagenet_finetuned", "normal", 50, 0.0001, 8, 15],
+
+    ["examples/masked/benign/benign (10)_inv_mult.png", "masked_model", "benign", 50, 0.0001, 8, 15],
+    ["examples/masked/benign/benign (93)_inv_mult.png", "masked_model", "benign", 50, 0.0001, 8, 15],
+    ["examples/masked/malignant/malignant (23)_inv_mult.png", "masked_model", "malignant", 50, 0.0001, 8, 15],
+    ["examples/masked/malignant/malignant (59)_inv_mult.png", "masked_model", "malignant", 50, 0.0001, 8, 15],
+    ["examples/masked/normal/normal (4)_inv_mult.png", "masked_model", "normal", 50, 0.0001, 8, 15], 
+    ["examples/masked/normal/normal (95)_inv_mult.png", "masked_model", "normal", 50, 0.0001, 8, 15],  
+]
 
 ui = gr.Interface(fn=predict, 
                 inputs=[
                     gr.Image(type="pil"),
+                    gr.Dropdown(MODEL_NAMES, default="imagenet_finetuned"),
+                    gr.Dropdown(["benign", "malignant", "normal"], default="normal"),
                     gr.Slider(minimum=10, maximum=100, default=50, label="SHAP Samples", step=1),
                     gr.Slider(minimum=0.0001, maximum=0.01, default=0.0001, label="SHAP Stdevs", step=0.0001),
                     gr.Slider(minimum=4, maximum=80, default=8, label="Occlusion Stride", step=1),
-                    gr.Slider(minimum=4, maximum=80, default=15, label="Occlusion Window", step=1)
+                    gr.Slider(minimum=4, maximum=80, default=15, label="Occlusion Window", step=1),
                 ],
-                outputs=[gr.Label(num_top_classes=3), gr.Image(type="pil"), gr.Image(type="pil"), gr.Image(type="pil")],
-                examples=[["benign (52).png", 50, 0.0001, 8, 15],
-                          ["benign (243).png", 50, 0.0001, 8, 15],
-                          ["malignant (127).png", 50, 0.0001, 8, 15],
-                          ["malignant (201).png", 50, 0.0001, 8, 15],
-                          ["normal (81).png", 50, 0.0001, 8, 15], 
-                          ["normal (101).png", 50, 0.0001, 8, 15]])
+                outputs=[
+                         gr.Label(num_top_classes=3),
+                         gr.Label(),
+                         gr.Image(type="pil"),
+                         gr.Image(type="pil"),
+                         gr.Image(type="pil")
+                ],
+                examples=examples)
 
 ui.launch(share=False, server_name="0.0.0.0")
