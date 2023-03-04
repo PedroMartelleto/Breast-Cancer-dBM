@@ -34,7 +34,7 @@ def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42, imageN
                            cv_fold = fold,
                            betas = (0.9, 0.999),
                            seed = seed,
-                           ds_name = "original_ds/Result_DS",
+                           ds_name = globals.DS_NAME,
                            ds_num_classes = 3)
     exp.make_dir_if_necessary()
     exp.save_config()
@@ -50,7 +50,11 @@ def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42, imageN
                           model=model, optim_context=optim_context, ray_tune=ray_tune)
     trainer.train_and_validate()
 
-def tune_hyperparameters():
+# finish pipelien with rects, generate conf matrix
+# do pipeline with masks
+# copy best_models to gradio
+
+def tune_hyperparameters(exp_name):
     print("Preparing to tune hyperparameters...")
 
     scheduler = ASHAScheduler(
@@ -63,11 +67,11 @@ def tune_hyperparameters():
     reporter = CLIReporter(
         metric_columns=["loss", "accuracy", "training_iteration"])
 
-    num_samples = 10
+    num_samples = 15
 
     print("Running {} trials...".format(num_samples))
     result = tune.run(
-        partial(run_experiment, exp_name="rects-tune", fold=0, ray_tune=True, imageNet=True),
+        partial(run_experiment, exp_name=exp_name, fold=0, ray_tune=True, imageNet=True),
         resources_per_trial={"cpu": 4, "gpu": 1},
         config=hyper.search_space,
         num_samples=num_samples,
@@ -98,7 +102,7 @@ def create_exp(exp_name, hyper_config, fold):
                             cv_fold = fold,
                             betas = (0.9, 0.999),
                             seed = 42,
-                            ds_name = "Dataset_BUSI_with_GT",
+                            ds_name = globals.DS_NAME,
                             ds_num_classes = 3)
 
 def calc_confusion_matrix(exp_name, fold):
@@ -116,56 +120,57 @@ def calc_confusion_matrix(exp_name, fold):
 # bash script one-liner that removes all folders with only one file in them named "config.json"
 # shopt -s globstar; for d in **/; do f=("$d"/*); [[ ${#f[@]} -eq 1 && -f "$f" && "${f##*/}" =~ ^config.json$ ]] && rm -r -- "$d"; done
 
-def interpret_model():
-    exp = create_exp(globals.RANDOM_INIT_EXP_NAMES[0], hyper.get_tuned_hyperparams(), 0)
-    device = torch.device(exp.device)
-    model = ModelFactory.create_model_from_checkpoint(globals.RANDOM_INIT_EXP_NAMES[0], "cuda:0", num_classes=exp.ds_num_classes)
-    ds = DatasetWrapper(os.path.join("ds", exp.ds_name), exp)
+# def interpret_model():
+#     exp = create_exp(globals.RANDOM_INIT_EXP_NAMES[0], hyper.get_tuned_hyperparams(), 0)
+#     device = torch.device(exp.device)
+#     model = ModelFactory.create_model_from_checkpoint(globals.RANDOM_INIT_EXP_NAMES[0], "cuda:0", num_classes=exp.ds_num_classes)
+#     ds = DatasetWrapper(os.path.join("ds", exp.ds_name), exp)
 
-    explainer = Explainer(model, device, ds)
-    prefix = "/netscratch/martelleto/ultrasound/explain/"
+#     explainer = Explainer(model, device, ds)
+#     prefix = "/netscratch/martelleto/ultrasound/explain/"
 
-    # Iterate over images in test set folder
-    for root, dirs, files in os.walk(globals.TEST_DS_PATH):
-        for file in tqdm(files):
-            img = Image.open(os.path.join(root, file))
-            explainer.shap(img, os.path.join(prefix, "SHAP_" + file))
-            explainer.occlusion(img, os.path.join(prefix, "OCC_" + file))
-            explainer.noise_tunnel(img, os.path.join(prefix, "NT_" + file))
-            explainer.gradcam(img, os.path.join(prefix, "GRAD_" + file))
+#     # Iterate over images in test set folder
+#     for root, dirs, files in os.walk(globals.TEST_DS_PATH):
+#         for file in tqdm(files):
+#             img = Image.open(os.path.join(root, file))
+#             explainer.shap(img, os.path.join(prefix, "SHAP_" + file))
+#             explainer.occlusion(img, os.path.join(prefix, "OCC_" + file))
+#             explainer.noise_tunnel(img, os.path.join(prefix, "NT_" + file))
+#             explainer.gradcam(img, os.path.join(prefix, "GRAD_" + file))
 
-def random_inits():
-    hyper_config = hyper.get_tuned_hyperparams("nofinetune_tune_hypers")
+def random_inits(hypers_name, exp_name):
+    hyper_config = hyper.get_tuned_hyperparams(hypers_name)
     
     # Use ray to train multiple experiments in parallel with different seeds
-    for seed in globals.SEEDS[0:1]:
-        run_experiment(hyper_config, exp_name=f"noimagenet-random-{seed}", fold=0, seed=seed, ray_tune=False)
+    for seed in globals.SEEDS:
+        run_experiment(hyper_config, exp_name=f"{exp_name}-{seed}", fold=0, seed=seed, ray_tune=False)
 
 def calc_conf_matrix_for_exp(exp_name, ds):
     device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
     best_model = ModelFactory.create_model_from_checkpoint(exp_name, device, num_classes=3)
     class_names = list(ds.class_to_idx.keys())
     test_loader = DataLoader(ds, batch_size=128)
-    exp = create_exp(exp_name, hyper.get_tuned_hyperparams("nofinetune_tune_hypers"), 0)
+    exp = create_exp(exp_name, hyper.get_tuned_hyperparams("rects_tune_hypers"), 0)
 
     trainer = TrainHelper(device=device, ds=None, exp_config=exp,
-                          model=best_model, optim_context=[None, None, None], ray_tune=False)
+                          model=best_model, optim_context=[None, None, None],
+                          ray_tune=False)
     trainer.save_confusion_matrix(test_loader, exp_name, class_names)
 
 #def remove_first_order_feats():
 
 if __name__ == "__main__":
     # 1 - tune hyperparameters
-    tune_hyperparameters()
+    # tune_hyperparameters("masked-tune")
 
     # 2 - random inits
-    # random_inits()
+    random_inits("masked_tune_hypers", "masked-random")
 
     # 3 - calculate confusion matrices from repeated experiments
-    #transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
-    #for seed in globals.SEEDS:
-    #    ds = AugDataset(globals.TEST_DS_PATH, aug=None, transform=transform)
-    #    calc_conf_matrix_for_exp(f"noimagenet-random-{seed}", ds)
+    transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
+    for seed in globals.SEEDS:
+       ds = AugDataset(globals.TEST_DS_PATH, aug=None, transform=transform)
+       calc_conf_matrix_for_exp(f"masked-random-{seed}", ds)
     
     # 4 - See ConfMatrix.ipynb
 

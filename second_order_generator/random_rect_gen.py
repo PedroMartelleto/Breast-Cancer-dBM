@@ -70,6 +70,8 @@ ys_std = ys.std()
 ws_std = ws.std()
 hs_std = hs.std()
 
+# Overwrite rectangles with new distribution?????
+
 classname = 'normal'
 
 if not os.path.exists(os.path.join(DESTINATION_PATH, classname)):

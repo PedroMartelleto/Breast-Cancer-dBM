@@ -2,7 +2,7 @@ import os
 import globals
 import torch
 
-DS_PATH = os.path.join(globals.BASE_PATH, "ds/original_ds/INV_MASKED_Dataset_BUSI_with_GT")
+DS_PATH = os.path.join(globals.BASE_PATH, "ds/original_ds/Result_DS")
 if DS_PATH.endswith("/"): DS_PATH = DS_PATH[:-1]
 TEST_DS_PATH = DS_PATH + "_test"
 

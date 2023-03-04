@@ -1,1 +1,1 @@
-{"learning_rate": 0.008927000938570285, "momentum": 0.9286398425613811, "batch_size": 32, "step_size": 5, "num_epochs": 20, "gamma": 0.1397572854942853}
+{"learning_rate": 0.0005806076502080509, "momentum": 0.9266338209534365, "batch_size": 16, "step_size": 20, "num_epochs": 50, "gamma": 0.7371598544006756}

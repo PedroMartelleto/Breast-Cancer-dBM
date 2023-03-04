@@ -3,7 +3,7 @@
 import os
 import globals
 
-DS_PATH = os.path.join(globals.BASE_PATH, "ds/original_ds/INV_MASKED_Dataset_BUSI_with_GT_test")
+DS_PATH = os.path.join(globals.BASE_PATH, "ds/original_ds/Result_DS_test")
 
 # Get class
 for root, dirs, files in os.walk(DS_PATH):

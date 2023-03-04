@@ -144,7 +144,14 @@ examples = [
     ["examples/masked/malignant/malignant (23)_inv_mult.png", "masked_model", "malignant", 50, 0.0001, 8, 15],
     ["examples/masked/malignant/malignant (59)_inv_mult.png", "masked_model", "malignant", 50, 0.0001, 8, 15],
     ["examples/masked/normal/normal (4)_inv_mult.png", "masked_model", "normal", 50, 0.0001, 8, 15], 
-    ["examples/masked/normal/normal (95)_inv_mult.png", "masked_model", "normal", 50, 0.0001, 8, 15],  
+    ["examples/masked/normal/normal (95)_inv_mult.png", "masked_model", "normal", 50, 0.0001, 8, 15],
+
+    ["examples/rects/benign/benign (10)_inv_mult.png", "rects_model", "benign", 50, 0.0001, 8, 15],
+    ["examples/rects/benign/benign (87)_inv_mult.png", "rects_model", "benign", 50, 0.0001, 8, 15],
+    ["examples/rects/malignant/malignant (15)_inv_mult.png", "rects_model", "malignant", 50, 0.0001, 8, 15],
+    ["examples/rects/malignant/malignant (62)_inv_mult.png", "rects_model", "malignant", 50, 0.0001, 8, 15],
+    ["examples/rects/normal/normal (39)_inv_mult_rect.png", "rects_model", "normal", 50, 0.0001, 8, 15], 
+    ["examples/rects/normal/normal (90)_inv_mult_rect.png", "rects_model", "normal", 50, 0.0001, 8, 15], 
 ]
 
 ui = gr.Interface(fn=predict, 
