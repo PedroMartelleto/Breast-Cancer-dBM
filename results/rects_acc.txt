@@ -1,0 +1,2 @@
+Overall mean accuracy: 0.845751633986928
+Overall std accuracy: 0.04170166060654578

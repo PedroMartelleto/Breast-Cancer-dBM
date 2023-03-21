@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch
 import numpy as np
 
-MODEL_NAMES = ["imagenet_finetuned", "not_finetuned", "masked_model"]
+MODEL_NAMES = ["imagenet_finetuned", "not_finetuned", "masked_model", "rects_model"]
 
 class Explainer:
     def __init__(self, model, img, class_names):

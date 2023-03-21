@@ -4,105 +4,106 @@ import numpy as np
 from imageio.v3 import imread, imwrite
 from skimage.transform import resize
 from tqdm import tqdm
-import pickle
+import create_test_ds
+import create_test_folders
 
 # For each file in the directories
 
-suffix = ""
-INV_MODE = True
-SRC_PATH = '/netscratch/martelleto/ultrasound/ds/original_ds/Result_DS' + suffix
-DESTINATION_PATH = '/netscratch/martelleto/ultrasound/ds/original_ds/Result_DS' + suffix
-SIGMA = 16
+def random_rect_gen():
+    create_test_ds.run()
+    create_test_folders.run()
 
-avg_img = np.zeros((224, 224, 3), dtype=np.float32)
-num_images = 0
+    for suffix in ["", "_test"]:
+        INV_MODE = True
+        SRC_PATH = '/netscratch/martelleto/ultrasound/ds/Result_DS' + suffix
+        DESTINATION_PATH = '/netscratch/martelleto/ultrasound/ds/Result_DS' + suffix
+        SIGMA = 16
 
-if not os.path.exists(DESTINATION_PATH):
-    os.makedirs(DESTINATION_PATH)
+        avg_img = np.zeros((224, 224, 3), dtype=np.float32)
+        num_images = 0
 
-def load_image(img_path):
-    img = imread(img_path)
+        if not os.path.exists(DESTINATION_PATH):
+            os.makedirs(DESTINATION_PATH)
 
-    if len(img.shape) == 3:
-        img = img[:,:,0]
+        def load_image(img_path):
+            img = imread(img_path)
 
-    if img.dtype == np.bool8:
-        mx = img.max()
-        img = img.astype(np.float32) / (mx if mx > 0 else 1.0)
-    else:
-        img = img.astype(np.float32) / 255.0
+            if len(img.shape) == 3:
+                img = img[:,:,0]
 
-    img = np.stack((img, img, img), axis=2)
-    img = resize(img, (224, 224), order=1)
+            if img.dtype == np.bool8:
+                mx = img.max()
+                img = img.astype(np.float32) / (mx if mx > 0 else 1.0)
+            else:
+                img = img.astype(np.float32) / 255.0
 
-    return img
+            img = np.stack((img, img, img), axis=2)
+            img = resize(img, (224, 224), order=1)
 
-def save_image(img_path, img):
-    imwrite(img_path, (img*255).astype(np.uint8), format="png", compress_level=0)
-# Save rectangles list to file
-with open(os.path.join(SRC_PATH, 'rects_list' + suffix + '.pkl'), 'rb') as f:
-    rects_list = pickle.load(f)
+            return img
 
-xs = []
-ys = []
-ws = []
-hs = []
+        def save_image(img_path, img):
+            imwrite(img_path, (img*255).astype(np.uint8), format="png", compress_level=0)
 
-for rect in rects_list:
-    x, y, w, h = rect
-    xs.append(x)
-    ys.append(y)
-    ws.append(w)
-    hs.append(h)
+        SIZES_JOINT_MEAN = np.array([1.43174167e+00, 6.80290521e+03])
+        SIZES_JOINT_COV = np.array([[ 3.40688872e-01, -3.42400038e+02],
+                                    [-3.42400038e+02,  5.11123773e+07]])
 
-xs = np.array(xs)
-ys = np.array(ys)
-ws = np.array(ws)
-hs = np.array(hs)
+        XY_JOINT_MEAN = np.array([67.60505529, 44.79462875])
+        XY_JOINT_COV = np.array([[1796.72984782, 179.04850821],
+                                [ 179.04850821, 639.407123  ]])
 
-xs_mean = xs.mean()
-ys_mean = ys.mean()
-ws_mean = ws.mean()
-hs_mean = hs.mean()
+        classname = 'normal'
 
-xs_std = xs.std()
-ys_std = ys.std()
-ws_std = ws.std()
-hs_std = hs.std()
+        listdir_normal = os.listdir(os.path.join(SRC_PATH, classname))
+        num_rects_to_generate = len(listdir_normal)
+        size_samples = np.random.multivariate_normal(SIZES_JOINT_MEAN, SIZES_JOINT_COV, size=num_rects_to_generate)
+        xy_samples = np.random.multivariate_normal(XY_JOINT_MEAN, XY_JOINT_COV, size=num_rects_to_generate)
 
-# Overwrite rectangles with new distribution?????
+        # Overwrite rectangles with new distribution?????
 
-classname = 'normal'
+        if not os.path.exists(os.path.join(DESTINATION_PATH, classname)):
+            os.makedirs(os.path.join(DESTINATION_PATH, classname))
 
-if not os.path.exists(os.path.join(DESTINATION_PATH, classname)):
-    os.makedirs(os.path.join(DESTINATION_PATH, classname))
+        i = 0
 
-for file in tqdm(os.listdir(os.path.join(SRC_PATH, classname))):
-    if 'mask' in file:
-        continue
+        for file in tqdm(listdir_normal):
+            if 'mask' in file:
+                continue
 
-    # Load image
-    try:
-        img = load_image(os.path.join(SRC_PATH, classname, file))
-    except Exception as e:
-        print(e)
-        continue
+            # Load image
+            try:
+                img = load_image(os.path.join(SRC_PATH, classname, file))
+            except Exception as e:
+                print(e)
+                continue
 
-    # Sample from rects_list
-    x = int(np.random.normal(xs_mean, xs_std))
-    y = int(np.random.normal(ys_mean, ys_std))
-    w = int(np.random.normal(ws_mean, ws_std))
-    h = int(np.random.normal(hs_mean, hs_std))
-    
-    x = min(max(0, x), img.shape[1] - 2)
-    y = min(max(0, y), img.shape[0] - 2)
-    w = min(max(1, w), img.shape[1] - x - 1)
-    h = min(max(1, h), img.shape[0] - y - 1)
+            # Sample from rects_list
+            x = int(xy_samples[i, 0])
+            y = int(xy_samples[i, 1])
+            aspect_ratio = max(int(size_samples[i, 0]), 0.01)
+            area = max(int(size_samples[i, 1]), 1)
+            i += 1
 
-    print(x, y, w, h)
+            w = int(np.sqrt(max(area * aspect_ratio, 1)))
+            h = int(np.sqrt(max(area / aspect_ratio, 1)))
 
-    # Fill the rectangle with black
-    img[y:y+h, x:x+w, :] = 0
+            # ensure the rectangle is not too much to the border
+            x = min(x, int(img.shape[1] - np.random.uniform(32, 50) - 1))
+            y = min(y, int(img.shape[0] - np.random.uniform(32, 50) - 1))
 
-    # Save new image
-    save_image(os.path.join(DESTINATION_PATH, classname, file.replace('.png', '_rect.png')), img)
+            x = min(max(0, x), img.shape[1] - 2)
+            y = min(max(0, y), img.shape[0] - 2)
+            w = min(max(int(np.random.uniform(32, 96)), w), img.shape[1] - x - 1)
+            h = min(max(int(np.random.uniform(32, 96)), h), img.shape[0] - y - 1)
+
+            print(x, y, w, h)
+
+            # Fill the rectangle with black
+            img[y:y+h, x:x+w, :] = 0
+
+            # Save new image
+            save_image(os.path.join(DESTINATION_PATH, classname, file.replace('.png', '_rect.png')), img)
+
+if __name__ == '__main__':
+    random_rect_gen()

@@ -1,6 +1,6 @@
 srun -K \
-    --time=14:00:00 \
-    --partition=RTXA6000 \
+    --time=18:00:00 \
+    --partition=batch \
     --mem-per-cpu=4G \
     --ntasks=1 \
     --cpus-per-task=15 \

@@ -21,6 +21,9 @@ from tqdm import tqdm
 def rand_uuid():
     return str(uuid.uuid4())[:8]
 
+# Runs a single experiment with the given hyperparameters
+# If ray_tune is True, the experiment name will be appended with a random UUID
+# If imageNet is True, the model will be initialized with ImageNet weights
 def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42, imageNet=True):
     exp = ExperimentConfig(name=exp_name + ((get_trial_id()) if ray_tune else ""), 
                            device="cuda:0" if torch.cuda.is_available() else "cpu",
@@ -50,10 +53,8 @@ def run_experiment(hyper_config, exp_name, fold, ray_tune=False, seed=42, imageN
                           model=model, optim_context=optim_context, ray_tune=ray_tune)
     trainer.train_and_validate()
 
-# finish pipelien with rects, generate conf matrix
-# do pipeline with masks
-# copy best_models to gradio
-
+# Runs several experiments with different hyperparameters
+# To explore the hyperparameter space, we randomly sample (mostly with uniform distributions)
 def tune_hyperparameters(exp_name):
     print("Preparing to tune hyperparameters...")
 
@@ -89,6 +90,7 @@ def tune_hyperparameters(exp_name):
         print("Best trial final validation accuracy: {}".format(
             best_trial.last_result["accuracy"]))
 
+# Helper function to create an ExperimentConfig object
 def create_exp(exp_name, hyper_config, fold):
     return ExperimentConfig(name=exp_name, 
                             device="cuda:0" if torch.cuda.is_available() else "cpu",
@@ -138,6 +140,7 @@ def calc_confusion_matrix(exp_name, fold):
 #             explainer.noise_tunnel(img, os.path.join(prefix, "NT_" + file))
 #             explainer.gradcam(img, os.path.join(prefix, "GRAD_" + file))
 
+# Runs several experiments with different seeds for shuffling the dataset
 def random_inits(hypers_name, exp_name):
     hyper_config = hyper.get_tuned_hyperparams(hypers_name)
     
@@ -145,6 +148,7 @@ def random_inits(hypers_name, exp_name):
     for seed in globals.SEEDS:
         run_experiment(hyper_config, exp_name=f"{exp_name}-{seed}", fold=0, seed=seed, ray_tune=False)
 
+# Calculates the confusion matrix for a given experiment
 def calc_conf_matrix_for_exp(exp_name, ds):
     device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
     best_model = ModelFactory.create_model_from_checkpoint(exp_name, device, num_classes=3)
@@ -157,20 +161,18 @@ def calc_conf_matrix_for_exp(exp_name, ds):
                           ray_tune=False)
     trainer.save_confusion_matrix(test_loader, exp_name, class_names)
 
-#def remove_first_order_feats():
-
 if __name__ == "__main__":
     # 1 - tune hyperparameters
-    # tune_hyperparameters("masked-tune")
+    # tune_hyperparameters("rects-tune")
 
     # 2 - random inits
-    random_inits("masked_tune_hypers", "masked-random")
+    # random_inits("rects_tune_hypers", "rects-random")
 
     # 3 - calculate confusion matrices from repeated experiments
-    transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
-    for seed in globals.SEEDS:
-       ds = AugDataset(globals.TEST_DS_PATH, aug=None, transform=transform)
-       calc_conf_matrix_for_exp(f"masked-random-{seed}", ds)
+    # transform = transforms.Compose([ transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize(mean=globals.NORM_MEAN, std=globals.NORM_STD) ])
+    # for seed in globals.SEEDS:
+    #    ds = AugDataset(globals.TEST_DS_PATH, aug=None, transform=transform)
+    #    calc_conf_matrix_for_exp(f"rects-random-{seed}", ds)
     
     # 4 - See ConfMatrix.ipynb
 

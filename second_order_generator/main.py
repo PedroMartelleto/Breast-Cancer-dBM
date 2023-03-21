@@ -5,13 +5,13 @@ from imageio.v3 import imread, imwrite
 from skimage.transform import resize
 from tqdm import tqdm
 import pickle
+import random_rect_gen
 
 # For each file in the directories
 
-suffix = ""
 INV_MODE = True
-DS_PATH = '/netscratch/martelleto/ultrasound/ds/original_ds/Dataset_BUSI_with_GT' + suffix
-DESTINATION_PATH = '/netscratch/martelleto/ultrasound/ds/original_ds/Result_DS' + suffix
+DS_PATH = '/netscratch/martelleto/ultrasound/ds/original_ds/Dataset_BUSI_with_GT'
+DESTINATION_PATH = '/netscratch/martelleto/ultrasound/ds/Result_DS'
 SIGMA = 16
 
 avg_img = np.zeros((224, 224, 3), dtype=np.float32)
@@ -130,5 +130,7 @@ for classname in os.listdir(DS_PATH):
         save_image(os.path.join(DESTINATION_PATH, classname, file.replace('.png', '_inv_mult.png')), inv_img_masked)
 
 # Save rectangles list to file
-with open(os.path.join(DESTINATION_PATH, 'rects_list' + suffix + '.pkl'), 'wb') as f:
+with open(os.path.join(DESTINATION_PATH, 'rects_list' + '.pkl'), 'wb') as f:
     pickle.dump(rects_list, f)
+
+random_rect_gen.random_rect_gen()
