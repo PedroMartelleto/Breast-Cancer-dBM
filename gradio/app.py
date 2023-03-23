@@ -4,6 +4,7 @@ from captum.attr import visualization as viz
 import torch
 from torchvision import transforms
 from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.cm as cm
 import torch.nn.functional as F
 import gradio as gr
 from torchvision.models import resnet50
@@ -20,6 +21,7 @@ class Explainer:
                                                 [(0, '#ffffff'),
                                                 (0.25, '#000000'),
                                                 (1, '#000000')], N=256)
+        self.jet_cmap = cm.get_cmap("cubehelix")
         self.class_names = class_names
 
         transform = transforms.Compose([
@@ -62,7 +64,7 @@ class Explainer:
                                             np.transpose(self.transformed_img.squeeze().cpu().detach().numpy(), (1,2,0)),
                                             ["original_image", "heat_map"],
                                             ["all", "absolute_value"],
-                                            cmap=self.default_cmap,
+                                            cmap=self.jet_cmap,
                                             show_colorbar=True)
         fig.suptitle("SHAP | " + self.fig_title, fontsize=12)
         return self.convert_fig_to_pil(fig)
@@ -82,7 +84,8 @@ class Explainer:
                                             ["all", "positive", "negative", "positive"],
                                             show_colorbar=True,
                                             titles=["Original", "Positive Attribution", "Negative Attribution", "Masked"],
-                                            fig_size=(18, 6)
+                                            fig_size=(18, 6),
+                                            cmap=cm.get_cmap("magma"),
                                             )
         fig.suptitle("Occlusion | " + self.fig_title, fontsize=12)
         return self.convert_fig_to_pil(fig)
@@ -102,7 +105,9 @@ class Explainer:
                                             ["all","positive","positive"],
                                             show_colorbar=True,
                                             titles=["Original", "Positive Attribution", "Masked"],
-                                            fig_size=(18, 6))
+                                            fig_size=(18, 6),
+                                            cmap=cm.get_cmap("magma"),
+                                            )
         fig.suptitle("GradCAM layer3[1].conv2 | " + self.fig_title, fontsize=12)
         return self.convert_fig_to_pil(fig)
 
@@ -128,30 +133,37 @@ def predict(img, model_name, true_label, shap_samples, shap_stdevs, occlusion_st
             "True label: " + true_label,
             explainer.shap(shap_samples, shap_stdevs),
             explainer.occlusion(occlusion_stride, occlusion_window),
-            explainer.gradcam()
+            explainer.gradcam(),
         ]
 
+shap_samples = 70
+shap_stdevs = 0.0001
+occlusion_stride = 16
+occlusion_window = 24
+
+vis_hypers = [ shap_samples, shap_stdevs, occlusion_stride, occlusion_window ]
+
 examples = [
-    ["examples/original/benign/benign (52).png", "imagenet_finetuned", "benign", 50, 0.0001, 8, 15],
-    ["examples/original/benign/benign (243).png", "imagenet_finetuned", "benign", 50, 0.0001, 8, 15],
-    ["examples/original/malignant/malignant (149).png", "imagenet_finetuned", "malignant", 50, 0.0001, 8, 15],
-    ["examples/original/malignant/malignant (201).png", "imagenet_finetuned", "malignant", 50, 0.0001, 8, 15],
-    ["examples/original/normal/normal (100).png", "imagenet_finetuned", "normal", 50, 0.0001, 8, 15], 
-    ["examples/original/normal/normal (101).png", "imagenet_finetuned", "normal", 50, 0.0001, 8, 15],
+    ["examples/original/benign/benign (52).png", "imagenet_finetuned", "benign", *vis_hypers],
+    ["examples/original/benign/benign (243).png", "imagenet_finetuned", "benign", *vis_hypers],
+    ["examples/original/malignant/malignant (149).png", "imagenet_finetuned", "malignant", *vis_hypers],
+    ["examples/original/malignant/malignant (201).png", "imagenet_finetuned", "malignant", *vis_hypers],
+    ["examples/original/normal/normal (100).png", "imagenet_finetuned", "normal", *vis_hypers], 
+    ["examples/original/normal/normal (101).png", "imagenet_finetuned", "normal", *vis_hypers],
 
-    ["examples/masked/benign/benign (10)_inv_mult.png", "masked_model", "benign", 50, 0.0001, 8, 15],
-    ["examples/masked/benign/benign (93)_inv_mult.png", "masked_model", "benign", 50, 0.0001, 8, 15],
-    ["examples/masked/malignant/malignant (23)_inv_mult.png", "masked_model", "malignant", 50, 0.0001, 8, 15],
-    ["examples/masked/malignant/malignant (59)_inv_mult.png", "masked_model", "malignant", 50, 0.0001, 8, 15],
-    ["examples/masked/normal/normal (4)_inv_mult.png", "masked_model", "normal", 50, 0.0001, 8, 15], 
-    ["examples/masked/normal/normal (95)_inv_mult.png", "masked_model", "normal", 50, 0.0001, 8, 15],
+    ["examples/masked/benign/benign (10)_inv_mult.png", "masked_model", "benign", *vis_hypers],
+    ["examples/masked/benign/benign (93)_inv_mult.png", "masked_model", "benign", *vis_hypers],
+    ["examples/masked/malignant/malignant (23)_inv_mult.png", "masked_model", "malignant", *vis_hypers],
+    ["examples/masked/malignant/malignant (59)_inv_mult.png", "masked_model", "malignant", *vis_hypers],
+    ["examples/masked/normal/normal (4)_inv_mult.png", "masked_model", "normal", *vis_hypers], 
+    ["examples/masked/normal/normal (95)_inv_mult.png", "masked_model", "normal", *vis_hypers],
 
-    ["examples/rects/benign/benign (10)_inv_mult.png", "rects_model", "benign", 50, 0.0001, 8, 15],
-    ["examples/rects/benign/benign (87)_inv_mult.png", "rects_model", "benign", 50, 0.0001, 8, 15],
-    ["examples/rects/malignant/malignant (15)_inv_mult.png", "rects_model", "malignant", 50, 0.0001, 8, 15],
-    ["examples/rects/malignant/malignant (62)_inv_mult.png", "rects_model", "malignant", 50, 0.0001, 8, 15],
-    ["examples/rects/normal/normal (39)_inv_mult_rect.png", "rects_model", "normal", 50, 0.0001, 8, 15], 
-    ["examples/rects/normal/normal (90)_inv_mult_rect.png", "rects_model", "normal", 50, 0.0001, 8, 15], 
+    ["examples/rects/benign/benign (10)_inv_mult.png", "rects_model", "benign", *vis_hypers],
+    ["examples/rects/benign/benign (87)_inv_mult.png", "rects_model", "benign", *vis_hypers],
+    ["examples/rects/malignant/malignant (15)_inv_mult.png", "rects_model", "malignant", *vis_hypers],
+    ["examples/rects/malignant/malignant (62)_inv_mult.png", "rects_model", "malignant", *vis_hypers],
+    ["examples/rects/normal/normal (39)_inv_mult_rect.png", "rects_model", "normal", *vis_hypers], 
+    ["examples/rects/normal/normal (90)_inv_mult_rect.png", "rects_model", "normal", *vis_hypers], 
 ]
 
 ui = gr.Interface(fn=predict, 
