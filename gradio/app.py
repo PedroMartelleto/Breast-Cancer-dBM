@@ -13,9 +13,12 @@ import torch
 import numpy as np
 
 MODEL_NAMES = ["imagenet_finetuned", "not_finetuned", "masked_model", "rects_model"]
+IMGNET_MEAN = np.array([0.485, 0.456, 0.406])
+IMGNET_STD = np.array([0.229, 0.224, 0.225])
 
 class Explainer:
-    def __init__(self, model, img, class_names):
+    def __init__(self, model, img, class_names, model_name):
+        self.model_name = model_name
         self.model = model
         self.default_cmap = LinearSegmentedColormap.from_list('custom blue', 
                                                 [(0, '#ffffff'),
@@ -31,14 +34,22 @@ class Explainer:
         ])
 
         transform_normalize = transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
+            mean=IMGNET_MEAN,
+            std=IMGNET_MEAN
         )
 
         self.transformed_img = transform(img)
 
+         # find all pixels that are exactly equal to 0
+        if self.model_name == "rects_model":
+            mask = np.all(self.transformed_img.cpu().detach().numpy() == 0, axis=0)
+
         self.input = transform_normalize(self.transformed_img)
         self.input = self.input.unsqueeze(0)
+
+        if self.model_name == "rects_model":
+            # replace pixels in mask with 0
+            self.input[:, :, mask == 1] = 0
 
         with torch.no_grad():
             self.output = self.model(self.input)
@@ -72,11 +83,17 @@ class Explainer:
     def occlusion(self, stride, sliding_window):
         occlusion = Occlusion(self.model)
 
+        x = np.zeros((3, 224, 224))
+        base = -np.divide(IMGNET_MEAN, IMGNET_STD)
+        x[0, :, :] = base[0]
+        x[1, :, :] = base[1]
+        x[2, :, :] = base[2]
+
         attributions_occ = occlusion.attribute(self.input,
                                                target=self.pred_label_idx,
                                                strides=(3, int(stride), int(stride)),
                                                sliding_window_shapes=(3, int(sliding_window), int(sliding_window)),
-                                               baselines=0)
+                                               baselines=torch.tensor(x, dtype=torch.float32))
 
         fig, _ = viz.visualize_image_attr_multiple(np.transpose(attributions_occ.squeeze().cpu().detach().numpy(), (1,2,0)),
                                             np.transpose(self.transformed_img.squeeze().cpu().detach().numpy(), (1,2,0)),
@@ -91,7 +108,7 @@ class Explainer:
         return self.convert_fig_to_pil(fig)
     
     def gradcam(self):
-        layer_gradcam = LayerGradCam(self.model, self.model.layer3[1].conv2)
+        layer_gradcam = LayerGradCam(self.model, self.model.layer4[-1].conv3)
         attributions_lgc = layer_gradcam.attribute(self.input, target=self.pred_label_idx)
 
         #_ = viz.visualize_image_attr(attributions_lgc[0].cpu().permute(1,2,0).detach().numpy(),
@@ -107,8 +124,8 @@ class Explainer:
                                             titles=["Original", "Positive Attribution", "Masked"],
                                             fig_size=(18, 6),
                                             cmap=cm.get_cmap("magma"),
-                                            )
-        fig.suptitle("GradCAM layer3[1].conv2 | " + self.fig_title, fontsize=12)
+                                        )
+        fig.suptitle("GradCAM layer4[-1].conv3 | " + self.fig_title, fontsize=12)
         return self.convert_fig_to_pil(fig)
 
 def create_model_from_checkpoint(model_name):
@@ -123,10 +140,13 @@ preloaded_models = {}
 labels = [ "benign", "malignant", "normal" ]
 
 def predict(img, model_name, true_label, shap_samples, shap_stdevs, occlusion_stride, occlusion_window):
+    if len(model_name) == 0:
+        return "Please select a model"
+
     if not model_name in preloaded_models:
         preloaded_models[model_name] = create_model_from_checkpoint(model_name + ".h5")
     
-    explainer = Explainer(preloaded_models[model_name], img, labels)
+    explainer = Explainer(preloaded_models[model_name], img, labels, model_name)
     
     return [
             explainer.confidences,
@@ -144,26 +164,17 @@ occlusion_window = 24
 vis_hypers = [ shap_samples, shap_stdevs, occlusion_stride, occlusion_window ]
 
 examples = [
-    ["examples/original/benign/benign (52).png", "imagenet_finetuned", "benign", *vis_hypers],
-    ["examples/original/benign/benign (243).png", "imagenet_finetuned", "benign", *vis_hypers],
+    ["examples/original/benign/benign (25).png", "imagenet_finetuned", "benign", *vis_hypers],
     ["examples/original/malignant/malignant (149).png", "imagenet_finetuned", "malignant", *vis_hypers],
-    ["examples/original/malignant/malignant (201).png", "imagenet_finetuned", "malignant", *vis_hypers],
-    ["examples/original/normal/normal (100).png", "imagenet_finetuned", "normal", *vis_hypers], 
     ["examples/original/normal/normal (101).png", "imagenet_finetuned", "normal", *vis_hypers],
 
     ["examples/masked/benign/benign (10)_inv_mult.png", "masked_model", "benign", *vis_hypers],
-    ["examples/masked/benign/benign (93)_inv_mult.png", "masked_model", "benign", *vis_hypers],
     ["examples/masked/malignant/malignant (23)_inv_mult.png", "masked_model", "malignant", *vis_hypers],
-    ["examples/masked/malignant/malignant (59)_inv_mult.png", "masked_model", "malignant", *vis_hypers],
     ["examples/masked/normal/normal (4)_inv_mult.png", "masked_model", "normal", *vis_hypers], 
-    ["examples/masked/normal/normal (95)_inv_mult.png", "masked_model", "normal", *vis_hypers],
 
     ["examples/rects/benign/benign (10)_inv_mult.png", "rects_model", "benign", *vis_hypers],
-    ["examples/rects/benign/benign (87)_inv_mult.png", "rects_model", "benign", *vis_hypers],
     ["examples/rects/malignant/malignant (15)_inv_mult.png", "rects_model", "malignant", *vis_hypers],
-    ["examples/rects/malignant/malignant (62)_inv_mult.png", "rects_model", "malignant", *vis_hypers],
     ["examples/rects/normal/normal (39)_inv_mult_rect.png", "rects_model", "normal", *vis_hypers], 
-    ["examples/rects/normal/normal (90)_inv_mult_rect.png", "rects_model", "normal", *vis_hypers], 
 ]
 
 ui = gr.Interface(fn=predict, 

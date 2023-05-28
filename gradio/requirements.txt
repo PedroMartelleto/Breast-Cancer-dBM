@@ -1,5 +1,5 @@
-tqdm
-seaborn
+matplotlib==3.6.3
 captum
 gradio
-matplotlib
+tqdm
+seaborn

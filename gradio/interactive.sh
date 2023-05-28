@@ -1,5 +1,5 @@
 srun -K \
-    --time=18:00:00 \
+    --time=1:00:00 \
     --partition=batch \
     --mem-per-cpu=4G \
     --ntasks=1 \
