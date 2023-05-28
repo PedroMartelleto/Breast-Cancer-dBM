@@ -34,4 +34,4 @@ Using breast cancer classification as an example, the task is to set up a comple
 ## Authors
 
 - Pedro M B Rezende (@PedroMartelleto)
-- A special thanks to Christoph Balada (PhD Reseacher @ Deutsches Forschungszentrum für Künstliche Intelligenz) for his supervision, guidance, support, writing the milestones, and providing the idea for this project.
+- A special thanks to Christoph Balada (PhD Reseacher @ Deutsches Forschungszentrum für Künstliche Intelligenz) for defining the milestones, guidance and support.
