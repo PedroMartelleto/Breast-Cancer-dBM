@@ -26,6 +26,8 @@ Using breast cancer classification as an example, the task is to set up a comple
 - [x] Basic Input / Output: Set up a basic website that offers a dialog to upload an image and submits that image to the model. Afterwards models results should be presented on the website.
 - [x] Hyperparameter configuration: Some models and exAI approaches require to adapt hyperparameters to show optimal results. Integrate necessary input fields (sliders, text fields etc.) to adapt these HPs.
 - [x] Integrate exAI insights: Most exAI methods use a saliency map to highlight ROIs. Integrate these maps into your website
+
+## [M4] Bonus
 - [x] Optional: ML applications set up in practical use are designed mostly in a way that users could provide feedback for the presented results. This gives opportunity to additional finetuning after a certain time of collecting new data. To allow a user to give feedback, the web interface should be complemented with an option to edit the saliency map, in order to tell the model if a certain area is not related to the classification or a ROI is missed. 
 
 ## Dataset
@@ -34,4 +36,4 @@ Using breast cancer classification as an example, the task is to set up a comple
 ## Authors
 
 - Pedro M B Rezende (@PedroMartelleto)
-- A special thanks to Christoph Balada (PhD Reseacher @ Deutsches Forschungszentrum für Künstliche Intelligenz) for defining the milestones, guidance and support.
+- A special thanks to Christoph Balada (PhD Reseacher @ Deutsches Forschungszentrum für Künstliche Intelligenz) for the project idea, defining milestones, guidance and support.
